@@ -26,7 +26,12 @@ import (
 	"github.com/victims/victims-api/db"
 	"github.com/victims/victims-api/log"
 	"github.com/victims/victims-api/types"
+	"github.com/victims/victims-api/upload"
 	"gopkg.in/mgo.v2/bson"
+	"net/http"
+	"time"
+	"io/ioutil"
+	"encoding/json"
 )
 
 // SimpleSearch checks one against the victims databse looking for matches.
@@ -112,7 +117,7 @@ func DeepSearch(c *gin.Context) {
 	c.AbortWithStatus(404)
 }
 
-// Upload checks a provided package against the victims database
+// Upload looks up hash from services and persists hash to victims database
 func Upload(c *gin.Context) {
 	file, fileHeader, err := c.Request.FormFile("package")
 	if err != nil {
@@ -122,32 +127,48 @@ func Upload(c *gin.Context) {
 	}
 	defer file.Close()
 
+
 	// Write the file out to the file system
 	// TODO: Don't use the original name or /tmp
-	out, err := os.Create("/tmp/" + fileHeader.Filename + ".test")
+	out, err := os.Create("/tmp/" + fileHeader.Filename)
 	defer out.Close()
 	if err != nil {
 		log.Logger.Fatal(err)
 	}
 	// Copy the content from the upload file to the file on disk
-	fileSize, err := io.Copy(out, file)
+	len, err := io.Copy(out, file)
 	if err != nil {
 		log.Logger.Fatal(err)
 	}
-	log.Logger.Infof("%s: %vk", fileHeader.Filename, int64(fileSize/1024))
-	// TODO: Submit to hashing service
-	// TODO: Retrieve response and store in requestedHash
-	requestedHash := types.MultipleHashRequest{}
-	requestedHash.Hashes = append(requestedHash.Hashes, types.SingleHashRequest{
-		Hash: "a0a86214ea153fb07ff35ceec0848dd1703eae22de036a825efc8394e50f65e3044832f3b49cf7e45a39edc470bdf738abc36a3a78ca7df3a6e73c14eaef94a8",
-	})
-	// ----------
-	// Search for hashes
-	cves := deepSearch(requestedHash)
-	if cves.Size() > 0 {
-		c.JSON(200, cves)
-		return
+
+	request, err := upload.UploadRequest("http://localhost:8081/hash", "library2", "/tmp/" + fileHeader.Filename)
+	if err != nil {
+		log.Logger.Error(err)
+		c.AbortWithStatus(500)
 	}
+	client := &http.Client{
+		Timeout: time.Second * 10,
+	}
+	resp, err := client.Do(request)
+	if err != nil {
+		log.Logger.Error(err)
+		c.AbortWithStatus(500)
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Logger.Error(err)
+		c.AbortWithStatus(500)
+	}
+
+
+	responseJson, _ := json.Marshal(string(body))
+	//singleHash := types.SingleHashRequest{}
+
+
+	log.Logger.Infof("length: %v, %v", len, string(responseJson))
+
+	//TODO persist singleHash to DB with CVE and Submitter
+
 	// Fall through to a 404
 	c.AbortWithStatus(404)
 }
