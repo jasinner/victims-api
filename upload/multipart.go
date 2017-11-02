@@ -8,9 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"encoding/json"
-	"time"
-	"github.com/victims/victims-api/types"
 )
 
 // Creates a new file upload http request with optional extra params

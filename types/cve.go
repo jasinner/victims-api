@@ -31,6 +31,11 @@ func (c *CVEs) Append(cves []CVE) {
 	}
 }
 
+func (c *CVEs) AppendSingle(cve string) {
+	*c = append(*c, CVE(cve))
+}
+
+
 // Size returns the size of the internal list
 func (c *CVEs) Size() int {
 	return len(*c)

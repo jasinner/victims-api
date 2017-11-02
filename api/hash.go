@@ -141,6 +141,8 @@ func Upload(c *gin.Context) {
 		log.Logger.Fatal(err)
 	}
 
+	log.Logger.Infof("length: %v", len)
+
 	request, err := upload.UploadRequest("http://localhost:8081/hash", "library2", "/tmp/" + fileHeader.Filename)
 	if err != nil {
 		log.Logger.Error(err)
@@ -160,16 +162,29 @@ func Upload(c *gin.Context) {
 		c.AbortWithStatus(500)
 	}
 
+	multiHash := []types.Hash{}
+	if err := json.Unmarshal(body, &multiHash); err != nil {
+		log.Logger.Error(err)
+		c.AbortWithStatus(500)
+	}
 
-	responseJson, _ := json.Marshal(string(body))
-	//singleHash := types.SingleHashRequest{}
+	cves := types.CVEs{}
+	cve := c.Request.FormValue("cve")
+	cves.AppendSingle(cve)
+
+	col, _ := db.GetCollection("hashes")
+	for _ , hash := range multiHash {
+		hash.Cves = cves
+		col.Insert(hash)
+	}
 
 
-	log.Logger.Infof("length: %v, %v", len, string(responseJson))
+	//log.Logger.Infof("length: %v, %v", len, string(responseJson))
 
 	//TODO persist singleHash to DB with CVE and Submitter
 
 	// Fall through to a 404
+
 	c.AbortWithStatus(404)
 }
 
